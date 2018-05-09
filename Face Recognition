@@ -1,0 +1,100 @@
+function [P] = RecogniseFace(I, featureType, classifierName)
+fprintf(' Running the function... \n')
+%% About the Function
+%Make sure file for this function is in the same file as all classifier .mat files
+%that returns a matrix P representing the people present in an RGB image I. P should be a matrix of size
+%Nx3, where N is the number of people detected in the number of image. The three columns should represent
+%1. id, a unique number associated with each person that matches the number in database provided
+%2. x, the x location of the person detected in the image (central face region)
+%3. y, the y location of the person detected in the image (central face region)
+%NOTE: PredictedLabel will return 0 if classifier failed to identify the class of the face. 
+%% Feature type and classifier type argument explanations
+%  This code works on the following: 
+%   Classifiers:  SVM, NN, Alexnet
+%   Features: HOG, SURF, None*
+%   *Please note  HOG and SURF features only work with NN and SVM
+%   classifiers,  AlexNet takes None as a feature argument.
+%there are 5 possible ways to call a function: 
+% RecogniseFace('ImageName',"HOG", "NN") - Neural Net with Hog features
+% RecogniseFace('ImageName',"SURF", "NN") -  Neural net with SURF features
+% RecogniseFace('ImageName',"HOG", "SVM") -  SVM with HOG features
+% RecogniseFace('ImageName',"SURF", "SVM") -  SVM with SURF features
+% RecogniseFace('ImageName',"None", "AlexNet") -  AlexNet (no features neded)
+%% Read image, Resize image,  Use classifiers and features to predict labels
+Image = imread(I);
+        % Find faces
+        FaceDetector = vision.CascadeObjectDetector('MergeThreshold', 8);  
+        FaceDetector.MinSize = [20 20]; % minimum size square around face (to avoid any nonsense faces detected (e.g. some face-like fragment on someone's clothes)
+        FaceDetector.ScaleFactor = 1.1;
+        bbox = step(FaceDetector, Image); %creates a bounding box
+        N = size(bbox, 1); %number of Images
+        P = []; %To hold P
+        if N == 0 %%when there are no faces detected
+            P = []; %keep empty if there are no faces detected
+            fprintf(' There are no faces,  detected in this picture :( ')
+        else  
+            fprintf(' Function found %u faces \n', N) %print number of faces detected
+        end
+            %Code from labs
+            for i=1:N % Extract each face
+                a = bbox(i, 1);
+                b = bbox(i, 2);
+                c = a+bbox(i, 3);
+                d = b+bbox(i, 4);
+                F = Image(b:d, a:c, :); 
+                F = imresize(F, [227 227]); %Resize image to make it the same as training images
+                x = (a + c)/2;% x coordinate
+                y = (b + d)/2;% y coordinate
+                Faces{i} = {F}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple faces)
+                image = cell2mat(Faces{i}); % convert cells to matrix
+                if isequal (featureType, "HOG") %Hog features
+                    if isequal (classifierName, "SVM")
+                        load SVMHog.mat; %Load pporopriate workspace
+                        HOGFeatures = extractHOGFeatures(image); %extract features
+                        PredictedLabel = predict(SVMHOGT, HOGFeatures); %predict label
+                        PredictedLabel = str2num(PredictedLabel{1}); %convert from string to number
+                           if ~isempty(PredictedLabel) %return 0 for no class found
+                            PredictedLabel = 0; 
+                          end                       
+                    elseif isequal (classifierName, "NN")
+                        load HOGNNet.mat %Load pporopriate workspace
+                        HOGFeatures = extractHOGFeatures(image); %extract features
+                        HOGFeaturesT = HOGFeatures';%just like in HOGNNet transposing the features
+                        getLabel = net(HOGFeaturesT); %predict label
+                        [~, PredictedLabel] = max(getLabel(:,1));  
+                          if ~isempty(PredictedLabel)%return 0 for no class found
+                            PredictedLabel = 0; 
+                          end
+                     end
+                 elseif isequal (featureType, "SURF") %surf features
+                     if isequal (classifierName, "SVM")
+                        load SVM_SURF.mat;%Load pporopriate workspace
+                        %Note:  no need to explicitly extract features for this one 
+                        [PredictedLabel, ~] = predict(SVM_SURFT, image); %predict label
+                          if ~isempty(PredictedLabel)%return 0 for no class found
+                            PredictedLabel = 0; 
+                          end
+                      elseif isequal (classifierName, "NN")
+                         load SURF_Net.mat;%Load pporopriate workspace
+                         SURFFeatures = encode(TrainingBag,image).' ; %extract SURF features and transpose 
+                         getLabel = SURF_Net(SURFFeatures);%predict label
+                         [~, PredictedLabel] = max(getLabel(:,1)); 
+                          if ~isempty(PredictedLabel)%return 0 for no class found
+                            PredictedLabel = 0; 
+                          end
+                     end
+                  elseif  isequal (featureType, "None")  &&   isequal (classifierName, "AlexNet") 
+                      load AlexNet.mat;%Load pporopriate workspace
+                      PredictedLabel = classify(netTransfer,image); %predict label
+                      if ~isempty(PredictedLabel)%return 0 for no class found
+                          PredictedLabel = 0;
+                     end
+                else
+                    fprintf('Please select correct feature type and classifier combo')
+                    x = 0; %return 0  if  incorrect combo
+                    y = 0;
+                    PredictedLabel = 0;
+                end      
+                P = [P; int32(PredictedLabel), int32(x), int32(y)]; %Answer,  with labels and coordinates in the same format     
+            end 
+end
