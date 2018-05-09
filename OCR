@@ -1,0 +1,157 @@
+function [ results ] = detectNum(FileName)
+%% Returns numbers seen in the picture or video
+%appropriare formats: 
+    %.jpg for pictures
+    %.mov for videos
+%returns individual numbers however they seem to be in sequence
+%it should work with more than 1 number!
+% I have added a bunch or image processing here - it works on most of the
+% images I've tested (but there are some odd ones)
+% tested on a few videos and it works (phewwww!!!!)
+
+%% Read image %%
+%NOTE: Code taken from here; https://uk.mathworks.com/help/vision/examples/automatically-detect-and-recognize-text-in-natural-images.html
+%Should work with videos too (phew!)
+%% defining array where results will be stored
+results  = [];  
+label  = [];
+%% Let's begin... 
+fprintf(' Running the function... \n')
+if FileName(end-3:end) == ".jpg" %select image files
+    fprintf(' You have submitted a picture \n')
+    Image  = imread(FileName); %read image
+    % creating a mask that will later be used  to identify numbers (well ish)
+    I = rgb2gray(Image); %change image to RGB
+    I = roicolor(I,10,180); %Select region of interest 
+    se = strel('disk',5); %object represents a flat morphological structuring element
+    I = imclose(I,se); %remove noise from regions using a flat morphological structuring element
+    I = imcomplement(I); %change black to white and white to black
+    %imshow(I)
+    % Detect MSER regions.
+    [mserRegions, mserConnComp] = detectMSERFeatures(I, ... 
+        'RegionAreaRange',[200 8000],'ThresholdDelta',80); %%Increased threshold so it detects less nonsense regions(e.g, some pattern on the floor that kinda looks like it could be a region)
+    % Use regionprops to measure MSER properties
+    mserStats = regionprops(mserConnComp, I, 'BoundingBox', 'Eccentricity', ...
+        'Solidity', 'Extent', 'Euler', 'Image', 'PixelValues', 'PixelValues','MeanIntensity','MaxIntensity', 'MinIntensity'...
+        ,'ConvexArea','ConvexHull','Extent','Extrema','Image','MajorAxisLength','MinorAxisLength','Perimeter','Orientation');
+    % Compute the aspect ratio using bounding box data.
+    bbox = vertcat(mserStats.BoundingBox); 
+    N = size(bbox, 1);
+    fprintf(' Function found %u digits \n', N)
+        if N == 0 %%when there are no faces detected
+                results = []; %keep empty if there are no faces detected
+                fprintf(' There are digits,  detected in this picture :( ')
+        else
+        
+            for i=1:N % Extract MSER regions
+                %I have looked at the differences between digits and non digits and found that digits had these characteristics in common so used that to filter out any non digits
+                if (mserStats(i).MeanIntensity == 0 && mserStats(i).Perimeter >= 100 && mserStats(i).ConvexArea >=1000 ) 
+                     a = bbox(i, 1); %creating boundries for image to be cropped (also taken from one of the labs)
+                     b = bbox(i, 2);
+                     c = a+bbox(i, 3);
+                     d = b+bbox(i, 4);
+                     Dgt = Image(b:d, a:c, :); 
+                    if size(Dgt,1) >= 25 %filtering out images that are too small
+                        Dgt2 =  imresize(Dgt, [227 227]); %resizing to be the same as training images
+                        %here we go...  more image processing!!
+                        se = strel('disk',5);
+                        Dgt2 = imclose(Dgt2,se);
+                        Dgt2 = imdilate(Dgt2,strel('disk',3)); %increase visibility of the character
+                        Dgt2 = imcomplement(Dgt2);
+                        %imshow(Dgt2)
+                        image_contrast =  max(Dgt2(:)) - min(Dgt2(:));
+                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple faces)
+                        Number = cell2mat(Digit{i}); 
+                            %I have looked at image contrast to find true
+                            %digits,  realised that contrast is most of the time over 150 so hopefully this works!
+                            if (max(Dgt2(:)) - min(Dgt2(:)))>150 
+                                %and now the fun part!  identifying what
+                                %the digit is!
+                                load SVMHOG_OCR.mat
+                                HOGFeatures = extractHOGFeatures(Number); %extract HOG features
+                                PredictedLabel = predict(SVMHOGT, HOGFeatures); %predict label
+                                PredictedLabel = str2num(PredictedLabel{1}); %convert from string to number
+                                label = double([label; int32(PredictedLabel)]); %Store results
+                            end
+                        end
+                    end
+              end
+        end
+% making this work for .mov files 
+elseif FileName(end-3:end) == ".mov"
+    fprintf(' You have submitted a video \n')
+    %code from https://uk.mathworks.com/matlabcentral/answers/196519-how-to-select-specific-frames-ex-every-10th-frame-out-of-a-video-for-further-analysis
+    Video = VideoReader(FileName); %reads videos
+    VideoInfo = get(Video);
+    numberOfFrames = Video.NumberOfFrames
+    framesToRead = 1:5:numberOfFrames; %read every 5th frame
+    % read in the frames
+    for k=1:length(framesToRead) 
+         frameIdx = framesToRead(k);
+         currentFrame  = read(Video,frameIdx);
+    I = rgb2gray(currentFrame); %change image to RGB
+    I = roicolor(I,10,180); %Select region of interest 
+    se = strel('disk',5); %object represents a flat morphological structuring element
+    I = imclose(I,se); %remove noise from regions using a flat morphological structuring element
+    I = imcomplement(I); %change black to white and white to black
+    %imshow(I)
+    % Detect MSER regions.
+    [mserRegions, mserConnComp] = detectMSERFeatures(I, ... 
+        'RegionAreaRange',[200 8000],'ThresholdDelta',80); %%Increased threshold so it detects less nonsense regions(e.g, some pattern on the floor that kinda looks like it could be a region)
+    % Use regionprops to measure MSER properties
+    mserStats = regionprops(mserConnComp, I, 'BoundingBox', 'Eccentricity', ...
+        'Solidity', 'Extent', 'Euler', 'Image', 'PixelValues', 'PixelValues','MeanIntensity','MaxIntensity', 'MinIntensity'...
+        ,'ConvexArea','ConvexHull','Extent','Extrema','Image','MajorAxisLength','MinorAxisLength','Perimeter','Orientation');
+    % Compute the aspect ratio using bounding box data.
+    bbox = vertcat(mserStats.BoundingBox); 
+    N = size(bbox, 1);
+    fprintf(' Function found %u digits \n', N)
+        if N == 0 %%when there are no faces detected
+                results = []; %keep empty if there are no faces detected
+                fprintf(' There are digits,  detected in this picture :( ')
+        else
+        
+            for i=1:N % Extract MSER regions
+                %I have looked at the differences between digits and non digits and found that digits had these characteristics in common so used that to filter out any non digits
+                if (mserStats(i).MeanIntensity == 0 && mserStats(i).Perimeter >= 100 && mserStats(i).ConvexArea >=1000 ) 
+                     a = bbox(i, 1); %creating boundries for image to be cropped
+                     b = bbox(i, 2);
+                     c = a+bbox(i, 3);
+                     d = b+bbox(i, 4);
+                     Dgt = currentFrame(b:d, a:c, :); 
+                    if size(Dgt,1) >= 25 %filtering out images that are too small
+                        Dgt2 =  imresize(Dgt, [227 227]); %resizing to be the same as training images
+                        %here we go...  more image processing!!
+                        se = strel('disk',5);
+                        Dgt2 = imclose(Dgt2,se);
+                        Dgt2 = imdilate(Dgt2,strel('disk',3)); %increase visibility of the character
+                        Dgt2 = imcomplement(Dgt2);
+                        %imshow(Dgt2)
+                        image_contrast =  max(Dgt2(:)) - min(Dgt2(:));
+                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple faces)
+                        Number = cell2mat(Digit{i}); 
+                            %I have looked at image contrast to find true
+                            %digits,  realised that contrast is most of the time over 150 so hopefully this works!
+                            if (max(Dgt2(:)) - min(Dgt2(:)))>150 
+                                %and now the fun part!  identifying what
+                                %the digit is!
+                                load SVMHOG_OCR.mat
+                                HOGFeatures = extractHOGFeatures(Number); %extract HOG features
+                                PredictedLabel = predict(SVMHOGT, HOGFeatures); %predict label
+                                PredictedLabel = str2num(PredictedLabel{1}); %convert from string to number
+                                label = double([label; int32(PredictedLabel)]); %Store result
+                            end
+                        end
+                    end
+              end
+        end    
+    end
+    [n,bin] = hist(label,unique(label)) ;%extract unique results
+    [~,idx] = sort(-n); %Sort descending
+    n(idx);% count instances
+	label = bin(idx); %return the most frequent (this is needed for videos as all sorts of numbers were found somehow haha)
+else
+    fprintf(' Please select .jpg or .mov file :) \n')
+end
+results = label;
+end             
