@@ -60,7 +60,7 @@ if FileName(end-3:end) == ".jpg" %select image files
                         Dgt2 = imcomplement(Dgt2);
                         %imshow(Dgt2)
                         image_contrast =  max(Dgt2(:)) - min(Dgt2(:));
-                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple faces)
+                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple digits)
                         Number = cell2mat(Digit{i}); 
                             %I have looked at image contrast to find true
                             %digits,  realised that contrast is most of the time over 150 so hopefully this works!
@@ -106,8 +106,8 @@ elseif FileName(end-3:end) == ".mov"
     bbox = vertcat(mserStats.BoundingBox); 
     N = size(bbox, 1);
     fprintf(' Function found %u digits \n', N)
-        if N == 0 %%when there are no faces detected
-                results = []; %keep empty if there are no faces detected
+        if N == 0 %%when there are no digits detected
+                results = []; %keep empty if there are no digits detected
                 fprintf(' There are digits,  detected in this picture :( ')
         else
         
@@ -128,7 +128,7 @@ elseif FileName(end-3:end) == ".mov"
                         Dgt2 = imcomplement(Dgt2);
                         %imshow(Dgt2)
                         image_contrast =  max(Dgt2(:)) - min(Dgt2(:));
-                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple faces)
+                        Digit{i} = {Dgt2}; %%Adapted to store multiple images (although it may look  a bit unnecesary, otherwise does not work with multiple digits)
                         Number = cell2mat(Digit{i}); 
                             %I have looked at image contrast to find true
                             %digits,  realised that contrast is most of the time over 150 so hopefully this works!
