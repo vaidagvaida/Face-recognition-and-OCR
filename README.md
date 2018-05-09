@@ -10,3 +10,6 @@ This function takes in 3 arguments: 1. Image path; 2. Feature type; 3. Classifie
 
 ### 2.2. detectNum
 This function takes file path as an argument and returns a matrix N x 1 that contains each number, seen in the picture (individual numbers are recognised, which means if a person is holding 108, the function should return 1,0,8). This function works for images (.jpg) and videos (.mov). This function uses trained SVM classifier with HOG features. 
+
+
+## Note: Network weights To be uploaded 
